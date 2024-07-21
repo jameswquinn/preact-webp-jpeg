@@ -1,0 +1,187 @@
+const path = require("path");
+const HtmlWebpackPlugin = require("html-webpack-plugin");
+const MiniCssExtractPlugin = require("mini-css-extract-plugin");
+const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
+const TerserPlugin = require("terser-webpack-plugin");
+const webpack = require("webpack");
+const WebpackPwaManifest = require("webpack-pwa-manifest");
+const { GenerateSW } = require("workbox-webpack-plugin");
+const BundleAnalyzerPlugin = require("webpack-bundle-analyzer").BundleAnalyzerPlugin;
+
+module.exports = (env, argv) => {
+  const isDevelopment = argv.mode === "development";
+
+  return {
+    entry: ["@babel/polyfill", "./src/index.js"],
+    output: {
+      path: path.resolve(__dirname, "dist"),
+      filename: isDevelopment ? "[name].bundle.js" : "[name].[contenthash].bundle.js",
+      chunkFilename: isDevelopment ? "[id].chunk.js" : "[id].[contenthash].chunk.js",
+      assetModuleFilename: "assets/[hash][ext][query]",
+      clean: true,
+    },
+    mode: isDevelopment ? "development" : "production",
+    devtool: isDevelopment ? "eval-source-map" : "source-map",
+    resolve: {
+      extensions: [".js", ".jsx", ".ts", ".tsx"],
+      alias: {
+        react: "preact/compat",
+        "react-dom": "preact/compat",
+      },
+    },
+    module: {
+      rules: [
+        {
+          test: /\.(js|jsx|ts|tsx)$/,
+          exclude: /node_modules/,
+          use: {
+            loader: "babel-loader",
+            options: {
+              presets: [
+                "@babel/preset-env",
+                ["@babel/preset-react", { pragma: "h" }],
+                "@babel/preset-typescript",
+              ],
+              plugins: ["@babel/plugin-transform-runtime"],
+              cacheDirectory: true,
+            },
+          },
+        },
+        {
+          test: /\.s?[ac]ss$/,
+          use: [
+            isDevelopment ? "style-loader" : MiniCssExtractPlugin.loader,
+            "css-loader",
+            "postcss-loader",
+            "sass-loader",
+          ],
+        },
+        {
+          test: /\.(jpe?g|png|gif|svg|webp)$/i,
+          oneOf: [
+            {
+              resourceQuery: /webp/,
+              use: [
+                {
+                  loader: "responsive-loader",
+                  options: {
+                    adapter: require("responsive-loader/sharp"),
+                    format: "webp",
+                    sizes: [300, 600, 1200],
+                    name: "images/[name]-[width].[ext]",
+                  },
+                },
+              ],
+            },
+            {
+              use: [
+                {
+                  loader: "responsive-loader",
+                  options: {
+                    adapter: require("responsive-loader/sharp"),
+                    sizes: [300, 600, 1200],
+                    name: "images/[name]-[width].[ext]",
+                  },
+                },
+                {
+                  loader: "image-webpack-loader",
+                  options: {
+                    mozjpeg: {
+                      progressive: true,
+                      quality: 75,
+                    },
+                    optipng: false,
+                    pngquant: false,
+                    gifsicle: false,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    plugins: [
+      new HtmlWebpackPlugin({
+        template: "./src/index.html",
+        minify: !isDevelopment,
+      }),
+      new MiniCssExtractPlugin({
+        filename: isDevelopment ? "[name].css" : "[name].[contenthash].css",
+      }),
+      new webpack.DefinePlugin({
+        "process.env.NODE_ENV": JSON.stringify(isDevelopment ? "development" : "production"),
+      }),
+      ...(isDevelopment ? [] : [
+        new WebpackPwaManifest({
+          name: "My Progressive Web App",
+          short_name: "MyPWA",
+          description: "My awesome Progressive Web App!",
+          background_color: "#ffffff",
+          theme_color: "#000000",
+          icons: [
+            {
+              src: path.resolve("src/assets/icon.png"),
+              sizes: [96, 128, 192, 256, 384, 512],
+            },
+          ],
+        }),
+        new GenerateSW({
+          clientsClaim: true,
+          skipWaiting: true,
+        }),
+        new BundleAnalyzerPlugin({
+          analyzerMode: "static",
+          openAnalyzer: false,
+        }),
+      ]),
+    ],
+    optimization: {
+      minimize: !isDevelopment,
+      minimizer: [
+        new TerserPlugin({
+          terserOptions: {
+            compress: {
+              drop_console: !isDevelopment,
+            },
+          },
+        }),
+        new CssMinimizerPlugin(),
+      ],
+      splitChunks: {
+        chunks: "all",
+        cacheGroups: {
+          vendors: {
+            test: /[\\/]node_modules[\\/]/,
+            name: "vendors",
+            chunks: "all",
+          },
+        },
+      },
+      runtimeChunk: "single",
+    },
+    performance: {
+      hints: isDevelopment ? false : "warning",
+      maxEntrypointSize: 250000,
+      maxAssetSize: 250000,
+    },
+    devServer: isDevelopment ? {
+      static: {
+        directory: path.join(__dirname, "dist"),
+      },
+      port: 9001,
+      open: true,
+      host: "0.0.0.0",
+      allowedHosts: "all",
+      hot: true,
+      historyApiFallback: true,
+      compress: true,
+      client: {
+        webSocketURL: "auto://0.0.0.0:0/ws",
+      },
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+      },
+    } : undefined,
+  };
+};
