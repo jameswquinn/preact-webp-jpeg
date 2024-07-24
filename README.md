@@ -18,7 +18,7 @@ A Preact app that detects browser support for WebP and falls back to JPEG, with 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/your-username/preact-webp-jpeg.git
+   git clone https://github.com/jameswquinn/preact-webp-jpeg.git
    cd preact-webp-jpeg
    ```
 
